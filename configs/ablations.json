@@ -1,0 +1,42 @@
+{
+  "description": "Component and hyperparameter ablation configurations (Sections 4.5-4.7, Tables 3-6, Appendix A)",
+  "r_end_sensitivity_table3": {
+    "task": "humaneval",
+    "backbone": "dream",
+    "budgets": [32, 64, 128, 256],
+    "r_start": 0.85,
+    "r_end_values": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
+    "interval": 2,
+    "heavy_ratio": 2
+  },
+  "schedule_and_interval_table4": {
+    "task": "mbpp",
+    "backbone": "dream",
+    "budgets": [32, 64, 128, 256],
+    "variants": [
+      {"name": "AIR_Cosine_K2", "schedule": "cosine", "interval": 2, "heavy_ratio": 2},
+      {"name": "Linear_K2", "schedule": "linear", "interval": 2, "heavy_ratio": 2},
+      {"name": "Fixed_0.2_K2", "schedule": "fixed", "fixed_rate": 0.2, "interval": 2, "heavy_ratio": 2},
+      {"name": "Fixed_0.5_K2", "schedule": "fixed", "fixed_rate": 0.5, "interval": 2, "heavy_ratio": 2},
+      {"name": "Fixed_0.8_K2", "schedule": "fixed", "fixed_rate": 0.8, "interval": 2, "heavy_ratio": 2},
+      {"name": "Interval_K4", "schedule": "cosine", "interval": 4, "heavy_ratio": 2},
+      {"name": "Interval_K16", "schedule": "cosine", "interval": 16, "heavy_ratio": 2}
+    ]
+  },
+  "heavy_checkpoint_table5": {
+    "backbone": "dream",
+    "tasks": ["humaneval", "mbpp", "gsm8k", "pubmedqa"],
+    "budgets": [32, 64, 128, 256],
+    "arms": {
+      "heavy_on": {"heavy_ratio": 2},
+      "heavy_off": {"heavy_ratio": -1}
+    }
+  },
+  "verification_score_table6": {
+    "task": "humaneval",
+    "backbone": "dream",
+    "budgets": [32, 64],
+    "heavy_ratio": 2,
+    "arms": ["prob", "margin"]
+  }
+}

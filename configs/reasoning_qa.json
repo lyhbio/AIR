@@ -1,0 +1,26 @@
+{
+  "description": "Mathematical reasoning and biomedical QA hyperparameters (GSM8K & PubMedQA, Section 4.3 & Table 2)",
+  "tasks": ["gsm8k", "pubmedqa"],
+  "backbones": {
+    "dream": "Dream-org/Dream-v0-Instruct-7B",
+    "llada": "GSAI-ML/LLaDA-8B-Instruct"
+  },
+  "common": {
+    "gen_length": 256,
+    "heavy_ratio": 2,
+    "r_start": 0.55,
+    "r_end": 0.30,
+    "schedule": "cosine",
+    "score_mode": "prob",
+    "sampling_alg": "entropy",
+    "temperature": 0.1,
+    "top_p": 0.9,
+    "num_fewshot": 0
+  },
+  "budgets": {
+    "32": {"interval": 6},
+    "64": {"interval": 12},
+    "128": {"interval": 24},
+    "256": {"interval": 48}
+  }
+}

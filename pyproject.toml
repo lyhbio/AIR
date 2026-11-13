@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "air-diffusion-sampler"
+version = "1.0.0"
+description = "AIR: Retrospective Remasking for Step-Efficient Diffusion Language Model Inference"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Zhongcheng Yang", email = "regentropfen.yang@gmail.com"},
+    {name = "Yinghong Li", email = "liyh@cqupt.edu.cn"},
+]
+dependencies = [
+    "torch>=2.1.0",
+    "transformers>=4.44.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+eval = [
+    "datasets>=2.18.0",
+    "accelerate>=0.28.0",
+    "lm-eval>=0.4.3",
+    "matplotlib>=3.8.0",
+]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/lyhbio/AIR"
+Repository = "https://github.com/lyhbio/AIR"
+
+[tool.setuptools.packages.find]
+include = ["air*", "benchmarks*"]
