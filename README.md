@@ -153,13 +153,13 @@ This repository is released under the [MIT License](LICENSE).
 
 ## Citation
 
-If you find this repository helpful in your research, please cite:
+If you use this codebase in your research before formal publication, please cite the GitHub repository (formal paper citation details will be updated upon acceptance):
 
 ```bibtex
-@article{yang2026air,
+@misc{yang2026air,
   title={AIR: Retrospective Remasking for Step-Efficient Diffusion Language Model Inference},
   author={Yang, Zhongcheng and Li, Yinghong},
-  journal={Applied Intelligence},
-  year={2026}
+  year={2026},
+  howpublished={\url{https://github.com/lyhbio/AIR}}
 }
 ```
