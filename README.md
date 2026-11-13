@@ -148,18 +148,3 @@ python scripts/plot_pareto_fig3.py --out-dir outputs
 ## License
 
 This repository is released under the [MIT License](LICENSE).
-
----
-
-## Citation
-
-If you use this codebase in your research before formal publication, please cite the GitHub repository (formal paper citation details will be updated upon acceptance):
-
-```bibtex
-@misc{yang2026air,
-  title={AIR: Retrospective Remasking for Step-Efficient Diffusion Language Model Inference},
-  author={Yang, Zhongcheng and Li, Yinghong},
-  year={2026},
-  howpublished={\url{https://github.com/lyhbio/AIR}}
-}
-```
