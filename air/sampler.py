@@ -40,8 +40,8 @@ class AIRConfig:
     r_end: float = 0.30               # Terminal remasking rate
     schedule: str = "cosine"          # "cosine" (default), "linear", or "fixed"
     fixed_rate: Optional[float] = None  # Constant remask fraction used when schedule == "fixed"
-    score_mode: str = "prob"          # Verification criterion: "prob" (default), "margin", or "entropy"
-    sampling_alg: str = "entropy"     # Phase 1 selection: "entropy", "maskgit_plus", or "topk_margin"
+    score_mode: str = "prob"          # Verification: "prob", "margin"/"committed_margin", "top2_margin", or "entropy"
+    sampling_alg: str = "entropy"     # Phase 1: "entropy", "argmax", "maskgit_plus", or "topk_margin"
     temperature: float = 0.0          # Sampling temperature (0.0 for greedy argmax)
     top_p: float = 1.0                # Nucleus sampling threshold (1.0 disables)
     top_k: Optional[int] = None       # Top-k truncation (None disables)
@@ -59,9 +59,9 @@ class AIRConfig:
             raise ValueError("r_start and r_end must lie in [0, 1]")
         if self.fixed_rate is not None and not (0.0 <= self.fixed_rate <= 1.0):
             raise ValueError("fixed_rate must lie in [0, 1]")
-        if self.score_mode not in {"prob", "margin", "entropy"}:
+        if self.score_mode not in {"prob", "margin", "committed_margin", "top2_margin", "entropy"}:
             raise ValueError(f"Unsupported score_mode: {self.score_mode!r}")
-        if self.sampling_alg not in {"entropy", "maskgit_plus", "topk_margin"}:
+        if self.sampling_alg not in {"entropy", "argmax", "maskgit_plus", "topk_margin"}:
             raise ValueError(f"Unsupported sampling_alg: {self.sampling_alg!r}")
         if self.temperature < 0.0 or not (0.0 < self.top_p <= 1.0):
             raise ValueError("temperature must be >= 0 and top_p must lie in (0, 1]")
@@ -115,10 +115,10 @@ def sample_tokens(
     log_probs = F.log_softmax(work, dim=-1)
     probs = log_probs.exp()
 
-    if temperature > 0.0:
-        candidates = torch.multinomial(probs, num_samples=1, generator=generator).squeeze(-1)
-    else:
+    if alg == "argmax" or temperature <= 0.0:
         candidates = work.argmax(dim=-1)
+    else:
+        candidates = torch.multinomial(probs, num_samples=1, generator=generator).squeeze(-1)
 
     if alg == "entropy":
         # Negative predictive entropy: higher score indicates sharper confidence
@@ -126,7 +126,7 @@ def sample_tokens(
     elif alg == "topk_margin":
         top2 = torch.topk(probs, k=min(2, probs.shape[-1]), dim=-1).values
         confidence = top2[:, 0] - top2[:, 1] if top2.shape[-1] == 2 else top2[:, 0]
-    elif alg == "maskgit_plus":
+    elif alg in {"argmax", "maskgit_plus"}:
         confidence = probs.gather(1, candidates.unsqueeze(1)).squeeze(1)
     else:
         raise ValueError(f"Unsupported sampling_alg: {alg!r}")
@@ -155,12 +155,15 @@ def compute_verification_scores(
     probs = F.softmax(logits.float(), dim=-1)
     if score_mode == "prob":
         return probs.gather(1, committed_ids.unsqueeze(1)).squeeze(1)
-    if score_mode == "margin":
+    if score_mode in {"margin", "committed_margin"}:
         p_committed = probs.gather(1, committed_ids.unsqueeze(1)).squeeze(1)
         probs_alt = probs.clone()
         probs_alt.scatter_(1, committed_ids.unsqueeze(1), -1.0)
         p_competitor = probs_alt.max(dim=-1).values
         return p_committed - p_competitor
+    if score_mode == "top2_margin":
+        top2 = torch.topk(probs, k=min(2, probs.shape[-1]), dim=-1).values
+        return top2[:, 0] - top2[:, 1] if top2.shape[-1] == 2 else top2[:, 0]
     if score_mode == "entropy":
         log_probs = F.log_softmax(logits.float(), dim=-1)
         return (probs * log_probs.clamp_min(-1e30)).sum(dim=-1)

@@ -26,7 +26,7 @@ Masked diffusion language models (MDLMs) enable parallel token generation, but u
 │   ├── __init__.py          # Public API exports
 │   ├── sampler.py           # Core AIR implementation (Algorithm 1, Heavy Interval, cosine/linear/fixed, prob/margin/entropy)
 │   ├── backbones.py         # Unified Dream-7B-Instruct (causal logit shift) and LLaDA-8B-Instruct adapters
-│   ├── baselines.py         # Fixed-budget Vanilla (entropy) and ReMDM baseline samplers
+│   ├── baselines.py         # Vanilla, ReMDM, EB-Sampler, and SlowFast baseline samplers
 │   └── lm_eval_adapter.py   # Drop-in lm-evaluation-harness wrapper for both backbones
 ├── benchmarks/
 │   ├── gsm8k_cot.py         # GSM8K zero-shot CoT prompt & numeric extractor
@@ -38,6 +38,7 @@ Masked diffusion language models (MDLMs) enable parallel token generation, but u
 ├── scripts/
 │   ├── quick_start.py       # Single-prompt generation demo (Dream-7B / LLaDA-8B)
 │   ├── run_eval.py          # Benchmark CLI wrapper via lm-evaluation-harness
+│   ├── run_ablations.py     # Paper ablation suites (Tables 3-6: sensitivity, schedule, heavy, score/argmax/margin)
 │   ├── stats_analysis.py    # Exact two-sided McNemar test & 95% Wilson score CI
 │   └── plot_pareto_fig3.py  # Reproduces Figure 3 (Accuracy vs. NFE Pareto frontier)
 ├── tests/
@@ -127,8 +128,23 @@ Inspect or run any configuration via `scripts/run_eval.py`:
 # Print exact preset configuration without loading weights
 python scripts/run_eval.py --task humaneval --backbone dream --method air --steps 64 --print-config-only
 
-# Run evaluation with lm-evaluation-harness
-python scripts/run_eval.py --task humaneval --backbone dream --method air --steps 64 --output outputs/he_64.json
+# Run AIR with greedy argmax + Margin verification score (Table 6)
+python scripts/run_eval.py --task humaneval --backbone dream --method air --steps 64 \
+  --sampling-alg argmax --temperature 0.0 --score-mode margin --output outputs/he_64_margin.json
+
+# Run dynamic-stopping baselines (EB-Sampler / SlowFast, Table 1 & Figure 3)
+python scripts/run_eval.py --task humaneval --backbone dream --method eb --output outputs/he_eb.json
+python scripts/run_eval.py --task humaneval --backbone dream --method slowfast --output outputs/he_slowfast.json
+```
+
+Inspect or launch the full paper ablation suite (Tables 3–6, Appendix A):
+
+```bash
+# Preview commands for all ablations (sensitivity, schedule, heavy, score/margin/argmax)
+python scripts/run_ablations.py --ablation all
+
+# Preview or execute verification-score & argmax ablations (Table 6)
+python scripts/run_ablations.py --ablation score --execute
 ```
 
 Reproduce Figure 3 (Accuracy–NFE Pareto Frontier):

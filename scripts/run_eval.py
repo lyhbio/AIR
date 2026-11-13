@@ -11,7 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from air import AIRConfig, ReMDMConfig, VanillaConfig
+from air import (
+    AIRConfig,
+    EBSamplerConfig,
+    ReMDMConfig,
+    SlowFastConfig,
+    VanillaConfig,
+)
 
 
 CONFIG_DIR = ROOT / "configs"
@@ -28,6 +34,8 @@ def build_paper_config(
     fixed_rate: float | None = None,
     interval_override: int | None = None,
     r_end_override: float | None = None,
+    sampling_alg_override: str | None = None,
+    temperature_override: float | None = None,
 ):
     """Constructs the exact sampler configuration matching Sections 4.1-4.7."""
     if task in {"humaneval", "mbpp"}:
@@ -47,6 +55,9 @@ def build_paper_config(
 
     heavy_ratio = common["heavy_ratio"] if heavy == "on" else -1
     model_id = preset["backbones"][backbone]
+    sampling_alg = sampling_alg_override or common["sampling_alg"]
+    temperature = common["temperature"] if temperature_override is None else temperature_override
+    top_p = 1.0 if temperature == 0.0 else common["top_p"]
 
     if method == "air":
         cfg = AIRConfig(
@@ -59,27 +70,42 @@ def build_paper_config(
             schedule=schedule,
             fixed_rate=fixed_rate,
             score_mode=score_mode,
-            sampling_alg=common["sampling_alg"],
-            temperature=common["temperature"],
-            top_p=common["top_p"],
+            sampling_alg=sampling_alg,
+            temperature=temperature,
+            top_p=top_p,
             backbone=backbone,
         )
     elif method == "vanilla":
         cfg = VanillaConfig(
             budget=steps,
             gen_length=common["gen_length"],
-            sampling_alg=common["sampling_alg"],
-            temperature=common["temperature"],
-            top_p=common["top_p"],
+            sampling_alg=sampling_alg,
+            temperature=temperature,
+            top_p=top_p,
             backbone=backbone,
         )
-    else:
+    elif method == "remdm":
         cfg = ReMDMConfig(
             budget=steps,
             gen_length=common["gen_length"],
-            sampling_alg=common["sampling_alg"],
-            temperature=common["temperature"],
-            top_p=common["top_p"],
+            sampling_alg=sampling_alg,
+            temperature=temperature,
+            top_p=top_p,
+            backbone=backbone,
+        )
+    elif method == "eb":
+        cfg = EBSamplerConfig(
+            max_nfe=common["gen_length"],
+            gen_length=common["gen_length"],
+            sampling_alg=sampling_alg,
+            temperature=temperature,
+            top_p=top_p,
+            backbone=backbone,
+        )
+    else:
+        cfg = SlowFastConfig(
+            max_nfe=common["gen_length"],
+            gen_length=common["gen_length"],
             backbone=backbone,
         )
     return model_id, cfg
@@ -89,10 +115,20 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Inspect or run AIR benchmark evaluations via lm-eval.")
     parser.add_argument("--task", choices=["humaneval", "mbpp", "gsm8k", "pubmedqa"], required=True)
     parser.add_argument("--backbone", choices=["dream", "llada"], default="dream")
-    parser.add_argument("--method", choices=["air", "vanilla", "remdm"], default="air")
+    parser.add_argument("--method", choices=["air", "vanilla", "remdm", "eb", "slowfast"], default="air")
     parser.add_argument("--steps", type=int, choices=[32, 64, 128, 256], default=64)
     parser.add_argument("--heavy", choices=["on", "off"], default="on")
-    parser.add_argument("--score-mode", choices=["prob", "margin", "entropy"], default="prob")
+    parser.add_argument(
+        "--score-mode",
+        choices=["prob", "margin", "committed_margin", "top2_margin", "entropy"],
+        default="prob",
+    )
+    parser.add_argument(
+        "--sampling-alg",
+        choices=["entropy", "argmax", "maskgit_plus", "topk_margin"],
+        default=None,
+    )
+    parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--schedule", choices=["cosine", "linear", "fixed"], default="cosine")
     parser.add_argument("--fixed-rate", type=float, default=None)
     parser.add_argument("--interval", type=int, default=None)
@@ -119,6 +155,8 @@ def main() -> None:
         fixed_rate=args.fixed_rate,
         interval_override=args.interval,
         r_end_override=args.r_end,
+        sampling_alg_override=args.sampling_alg,
+        temperature_override=args.temperature,
     )
     resolved_model = args.model or model_id
 

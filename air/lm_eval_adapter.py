@@ -13,7 +13,16 @@ from tqdm import tqdm
 from lm_eval.api.model import LM
 
 from .backbones import BackboneAdapter, infer_backbone_type, load_backbone, resolve_mask_token_id
-from .baselines import ReMDMConfig, VanillaConfig, remdm_generate, vanilla_generate
+from .baselines import (
+    EBSamplerConfig,
+    ReMDMConfig,
+    SlowFastConfig,
+    VanillaConfig,
+    eb_sampler_generate,
+    remdm_generate,
+    slowfast_generate,
+    vanilla_generate,
+)
 from .sampler import AIRConfig, air_generate
 
 
@@ -37,7 +46,7 @@ class DiffusionAIRHarnessLM(LM):
         self.device = torch.device(device)
         if self.device.type == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("CUDA not available; pass device='cpu' or install CUDA PyTorch")
-        if method not in {"air", "vanilla", "remdm"}:
+        if method not in {"air", "vanilla", "remdm", "eb", "slowfast"}:
             raise ValueError(f"Unsupported method: {method!r}")
 
         self.method = method
@@ -58,8 +67,12 @@ class DiffusionAIRHarnessLM(LM):
             self.cfg = AIRConfig(backbone=self.backbone, **sampler_kwargs)
         elif method == "vanilla":
             self.cfg = VanillaConfig(backbone=self.backbone, **sampler_kwargs)
-        else:
+        elif method == "remdm":
             self.cfg = ReMDMConfig(backbone=self.backbone, **sampler_kwargs)
+        elif method == "eb":
+            self.cfg = EBSamplerConfig(backbone=self.backbone, **sampler_kwargs)
+        else:
+            self.cfg = SlowFastConfig(backbone=self.backbone, **sampler_kwargs)
         self.records: List[dict] = []
 
     def loglikelihood(self, requests):
@@ -114,8 +127,28 @@ class DiffusionAIRHarnessLM(LM):
                     mask_id=self.mask_id,
                     generator=generator,
                 )
-            else:
+            elif self.method == "remdm":
                 gen_tokens, stats = remdm_generate(
+                    self.adapter,
+                    self.tokenizer,
+                    ids,
+                    self.cfg,
+                    device=str(self.device),
+                    mask_id=self.mask_id,
+                    generator=generator,
+                )
+            elif self.method == "eb":
+                gen_tokens, stats = eb_sampler_generate(
+                    self.adapter,
+                    self.tokenizer,
+                    ids,
+                    self.cfg,
+                    device=str(self.device),
+                    mask_id=self.mask_id,
+                    generator=generator,
+                )
+            else:
+                gen_tokens, stats = slowfast_generate(
                     self.adapter,
                     self.tokenizer,
                     ids,

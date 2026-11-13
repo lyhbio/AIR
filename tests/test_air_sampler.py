@@ -15,15 +15,20 @@ if str(ROOT) not in sys.path:
 
 from air import (
     AIRConfig,
+    EBSamplerConfig,
     ReMDMConfig,
+    SlowFastConfig,
     VanillaConfig,
     air_generate,
     compute_remask_rate,
+    eb_sampler_generate,
     remdm_generate,
+    slowfast_generate,
     vanilla_generate,
 )
 from air.backbones import align_logits_for_backbone
 from benchmarks import extract_gsm8k_answer, extract_pubmedqa_answer, format_pubmedqa_prompt
+from scripts.run_ablations import build_ablation_plan
 from scripts.run_eval import build_paper_config
 from scripts.stats_analysis import exact_mcnemar_test, wilson_confidence_interval
 
@@ -156,3 +161,61 @@ def test_benchmark_extractors():
     assert "Answer: yes" in prompt
     assert extract_pubmedqa_answer("Reasoning: ... Therefore Answer: YES.") == "yes"
     assert extract_gsm8k_answer("Let's compute 12 + 30 = 42.\n#### 42") == "42"
+
+
+@pytest.mark.parametrize("score_mode", ["committed_margin", "top2_margin"])
+def test_argmax_and_margin_variants(score_mode: str):
+    prompt = torch.tensor([[1, 2, 3]])
+    model = ToyDiffusionForward()
+    cfg = AIRConfig(
+        budget=8,
+        gen_length=16,
+        interval=2,
+        heavy_ratio=1,
+        score_mode=score_mode,
+        sampling_alg="argmax",
+        temperature=0.0,
+    )
+    tok, stats = air_generate(model, None, prompt, cfg, mask_id=11, record_trace=True)
+    assert tok.shape == (16,)
+    assert stats["nfe"] == model.calls == 8
+    assert stats["remaining_masks"] == 0
+    assert (tok != 11).all()
+
+
+def test_dynamic_stopping_baselines():
+    prompt = torch.tensor([[1, 2, 3]])
+
+    eb_model = ToyDiffusionForward()
+    eb_tok, eb_stats = eb_sampler_generate(
+        eb_model, None, prompt, EBSamplerConfig(max_nfe=16, gen_length=12, eb_gamma=0.5), mask_id=11
+    )
+    assert eb_tok.shape == (12,)
+    assert 1 <= eb_stats["nfe"] == eb_model.calls <= 16
+    assert eb_stats["remaining_masks"] == 0
+
+    sf_model = ToyDiffusionForward()
+    sf_tok, sf_stats = slowfast_generate(
+        sf_model, None, prompt, SlowFastConfig(max_nfe=16, gen_length=12), mask_id=11
+    )
+    assert sf_tok.shape == (12,)
+    assert 1 <= sf_stats["nfe"] == sf_model.calls <= 16
+    assert sf_stats["remaining_masks"] == 0
+
+
+def test_ablation_plan_generation(tmp_path: Path):
+    _, eb_cfg = build_paper_config("humaneval", "dream", "eb", 64)
+    _, sf_cfg = build_paper_config("humaneval", "dream", "slowfast", 64)
+    assert eb_cfg.max_nfe == 256
+    assert sf_cfg.max_nfe == 256
+
+    _, argmax_cfg = build_paper_config(
+        "humaneval", "dream", "air", 64, score_mode="margin", sampling_alg_override="argmax", temperature_override=0.0
+    )
+    assert argmax_cfg.sampling_alg == "argmax"
+    assert argmax_cfg.temperature == 0.0
+    assert argmax_cfg.score_mode == "margin"
+
+    jobs = build_ablation_plan("all", tmp_path)
+    # 28 (Table 3) + 28 (Table 4) + 32 (Table 5) + 12 (Table 6 prob/margin/top2_margin/entropy + argmax)
+    assert len(jobs) == 100
